@@ -13,6 +13,7 @@ APP_SECRET: str = os.environ.get("APP_SECRET", "").strip()
 
 META_CONFIG_ID = os.environ.get("META_CONFIG_ID", "").strip()
 REDIRECT_URI = os.environ.get("REDIRECT_URI", "https://localhost/").strip()
+WEBHOOK_VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN", "").strip()
 GRAPH_BASE = "https://graph.facebook.com"
 
 # requests applies this timeout separately to connection and response reads.

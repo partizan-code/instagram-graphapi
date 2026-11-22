@@ -5,13 +5,19 @@ description = "Instagram Direct and media publishing via Meta Unified Login"
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
 dependencies = [
+    "fastapi>=0.115,<1",
     "loguru>=0.7,<1",
     "python-dotenv>=1.2.2,<2",
     "requests>=2.34.2,<3",
+    "uvicorn>=0.34,<1",
 ]
 
 [dependency-groups]
-dev = ["pytest>=8,<10", "ruff>=0.17.3,<0.18"]
+dev = [
+    "httpx>=0.28,<1",
+    "pytest>=8,<10",
+    "ruff>=0.17.3,<0.18",
+]
 
 [tool.uv]
 package = false

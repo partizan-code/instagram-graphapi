@@ -1,8 +1,10 @@
 """Keep the entire test session isolated from local secrets and network access."""
 
+import asyncio
 import json
 import os
 import socket
+from contextlib import contextmanager
 from unittest.mock import MagicMock, Mock, patch
 
 import dotenv
@@ -24,6 +26,17 @@ def isolated_session():
     def blocked(*args, **kwargs):
         raise AssertionError("Network access is forbidden in tests")
 
+    # On Windows, loop creation uses a loopback socketpair for its internal wakeup.
+    # Initialize it before blocking connects; all requests still use ASGI in memory.
+    with asyncio.Runner() as runner:
+        runner.get_loop()
+        with isolated_environment(blocked):
+            yield runner
+
+
+@contextmanager
+def isolated_environment(blocked):
+    """Keep the blockers active throughout each test, including ASGI requests."""
     with (
         patch.dict(
             os.environ,

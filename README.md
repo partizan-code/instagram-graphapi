@@ -35,7 +35,11 @@ HTTP использует существующий `requests`: Bearer-загол
 закрытие ответов/сессии, без редиректов. Loguru выводит сообщения только в консоль.
 Сырые HTTP-ошибки, токены и URL из ответов не логируются.
 
-Отправка сообщений, вебхуки, БД и сохранение переписки отсутствуют.
+Отправка сообщений, БД и сохранение переписки отсутствуют.
+Отдельный диагностический webhook-сервер: `mise run tunnel`, затем `mise run webhook`.
+При запуске сервер запросит HTTPS-адрес tuna в консоли и выведет Callback URL для Meta.
+Нужны `APP_SECRET` и отдельный `WEBHOOK_VERIFY_TOKEN` в `.env`.
+Настройка и проверка событий — [Webhooks через tuna](docs/WEBHOOKS.md).
 `auth.py` и `publisher.py` также используют Unified Login; обычный запуск их не вызывает.
 Старые `INSTAGRAM_TOKEN`, Instagram OAuth и grant types больше не используются.
 
@@ -93,5 +97,5 @@ mise run check
 Тесты используют фиктивные данные, блокируют сеть и загрузку настоящего `.env`.
 Запуск приложения обращается к реальному аккаунту и не является тестом.
 
-[Direct](docs/DIRECT.md) · [Архитектура](docs/ARCHITECTURE.md) ·
+[Direct](docs/DIRECT.md) · [Webhooks](docs/WEBHOOKS.md) · [Архитектура](docs/ARCHITECTURE.md) ·
 [Разработка](docs/DEVELOPMENT.md) · [Состояние](PROJECT_STATUS.md) · [Правила](AGENTS.md).

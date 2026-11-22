@@ -25,13 +25,21 @@ run = "uv run --locked python main.py"
 description = "Run isolated tests without credentials or live API calls"
 run = "uv run --locked pytest"
 
+[tasks.webhook]
+description = "Receive Instagram webhooks; prompt for the public tuna HTTPS URL"
+run = "uv run --locked python webhook_server.py"
+
+[tasks.tunnel]
+description = "Expose local webhook port through tuna without HTTP request inspection"
+run = "tuna http 8000 --inspect=false"
+
 [tasks.lint]
 description = "Check Python code and formatting"
 run = ["uv run --locked ruff check .", "uv run --locked ruff format --check ."]
 
 [tasks.format]
 description = "Format project Python files"
-run = "uv run --locked ruff format main.py api.py auth.py config.py publisher.py logging_config.py tests"
+run = "uv run --locked ruff format main.py api.py auth.py config.py publisher.py logging_config.py webhook_server.py tests"
 
 [tasks.check]
 description = "Run lint, formatting checks and isolated tests"
