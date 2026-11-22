@@ -1,0 +1,39 @@
+[tools]
+python = "3.13.18"
+uv = "0.8.18"
+
+[env]
+# Sandbox rules forbid virtual environments inside the project directory.
+# Hash the project path so different checkouts do not share an environment.
+UV_PROJECT_ENVIRONMENT = "{{ xdg_data_home }}/uv/venvs/insta-posting-{{ config_root | hash }}"
+UV_PYTHON = { value = "{{ tools.python.path }}/{% if os() == 'windows' %}python.exe{% else %}bin/python{% endif %}", tools = true }
+UV_PYTHON_DOWNLOADS = "never"
+PYTHONDONTWRITEBYTECODE = "1"
+
+[settings]
+python.uv_venv_auto = "source"
+
+[tasks.setup]
+description = "Install locked application and development dependencies"
+run = "uv sync --locked"
+
+[tasks.start]
+description = "Read Instagram authorization, Direct dialogs and recent history (live API)"
+run = "uv run --locked python main.py"
+
+[tasks.test]
+description = "Run isolated tests without credentials or live API calls"
+run = "uv run --locked pytest"
+
+[tasks.lint]
+description = "Check Python code and formatting"
+run = ["uv run --locked ruff check .", "uv run --locked ruff format --check ."]
+
+[tasks.format]
+description = "Format project Python files"
+run = "uv run --locked ruff format main.py api.py auth.py config.py publisher.py logging_config.py tests"
+
+[tasks.check]
+description = "Run lint, formatting checks and isolated tests"
+depends = ["lint"]
+run = "uv run --locked pytest"

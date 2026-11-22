@@ -1,0 +1,41 @@
+# Credentials and local settings
+.env
+.env.*
+!.env.example
+mise.local.toml
+mise.*.local.toml
+
+# Python and tooling
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Private media, runtime data and logs
+*.jpg
+*.jpeg
+*.png
+*.mp4
+*.mov
+data/
+logs/
+tmp/
+.cache/
+*.log
+*.sqlite*
+*.db
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

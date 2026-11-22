@@ -1,0 +1,30 @@
+[project]
+name = "insta-posting"
+version = "0.1.0"
+description = "Instagram Direct and media publishing via Meta Unified Login"
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "loguru>=0.7,<1",
+    "python-dotenv>=1.2.2,<2",
+    "requests>=2.34.2,<3",
+]
+
+[dependency-groups]
+dev = ["pytest>=8,<10", "ruff>=0.17.3,<0.18"]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+extend-exclude = ["venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-config --strict-markers"
+pythonpath = ["."]
