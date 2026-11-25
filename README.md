@@ -1,101 +1,207 @@
-# Instagram Direct
+# Instagram Graph API Toolkit
 
-Небольшой Python-сценарий для чтения последних сообщений через Meta Unified Login.
+Python-инструментарий для интеграции с Instagram через Meta Graph API: авторизация
+через Meta Unified Login, чтение диалогов Direct, публикация медиа и приём webhook-событий.
+Проект объединяет функции Python API, сценарий чтения переписки и отдельный
+диагностический FastAPI-сервер; общий HTTP-слой и изолированные тесты поддерживают
+единые правила работы с внешним API.
 
-## Запуск
+## Возможности
 
-В локальном `.env`:
+| Направление | Реализовано |
+| --- | --- |
+| Authentication | Meta Unified Login: вход через браузер, проверка редиректа, обмен кода и сохранение бизнес-токена; отдельная функция выпуска нового токена |
+| Direct message retrieval | Выбор назначенного Instagram-аккаунта и вывод полученной страницы диалогов с вложенными сообщениями |
+| Media publishing | Фото, Reels, Stories и карусели из 2–20 элементов IMAGE/VIDEO; создание и публикация контейнеров, ожидание обработки видео |
+| Webhook handling | Проверка callback, проверка подписи и структуры событий Instagram, ответ о приёме и счётчики событий без сохранения тела |
 
-```dotenv
-META_ACCESS_TOKEN=<System User Token>
-META_API_VERSION=v27.0
-INSTAGRAM_ACCOUNT_ID=<ID Instagram-аккаунта>
+Это реализованные сценарии, а не подтверждение работы всех операций на реальном
+аккаунте. Границы проверки описаны в разделе [Состояние и ограничения](#состояние-и-ограничения).
+
+## Архитектура
+
+```mermaid
+flowchart LR
+    Main["main.py · Direct"] --> Http["api.py · HTTP"]
+    Auth["auth.py · Unified Login"] --> Http
+    Publisher["publisher.py · медиа"] --> Http
+    Http --> Graph["Meta Graph API"]
+    Auth --> Login["Meta OAuth · браузер"]
+    Meta["Meta Webhooks"] --> Tuna["tuna · HTTPS"]
+    Tuna --> Hook["webhook_server.py · FastAPI"]
+    Config["config.py · .env / окружение"] -.-> Main
+    Config -.-> Auth
+    Config -.-> Publisher
+    Config -.-> Http
+    Config -.-> Hook
+    Main -.-> Logs["logging_config.py · Loguru"]
+    Auth -.-> Logs
+    Hook -.-> Logs
 ```
 
-При единственном назначенном аккаунте `INSTAGRAM_ACCOUNT_ID` можно не задавать.
-Если аккаунтов несколько или список неполный, нужен явный ID.
-Переменные терминала имеют приоритет над `.env`.
+Сплошные стрелки показывают вызовы и поток запросов, пунктирные — настройки и
+логирование. `main.py` только читает Direct; авторизация и публикации вызываются
+явно из Python. Webhook-сервер запускается отдельно и не вызывает Graph API.
+Подробности модулей — в [описании архитектуры](docs/ARCHITECTURE.md).
 
-```console
-mise run start
-```
+## Инженерные решения
 
-`main.py` без аргументов делает два GET-запроса:
+| Решение | Назначение и обоснование |
+| --- | --- |
+| Централизованный HTTP-слой | `api.py` объединяет GET/POST, версию API, Bearer-авторизацию, тайм-ауты, закрытие ресурсов и безопасные ошибки; модули не дублируют транспортную логику |
+| OAuth state и redirect URI | Случайный `state` связывает ответ с попыткой входа; проверка адреса редиректа и единственного кода отклоняет неподходящие ответы до обмена токена |
+| HMAC-SHA256 для webhook | Подпись вычисляется по исходным байтам тела с `APP_SECRET` и сравнивается через `hmac.compare_digest`, чтобы проверить подлинность и целостность события |
+| App Secret Proof | `auth.refresh()` добавляет `appsecret_proof` к запросу выпуска бизнес-токена, подтверждая владение секретом приложения |
+| Безопасное логирование | Общий Loguru пишет в консоль без файлов, сырых HTTP-ошибок и значений локальных переменных; webhook выводит результаты и счётчики. Сценарий Direct намеренно показывает переписку в консоли |
+| Ограничение чтения webhook | Лимит тела 1 МиБ и 10 секунд на чтение ограничивают расход памяти и время ожидания входящего запроса |
+| Изолированное тестирование | HTTP-моки, ASGITransport, фиктивные настройки и блокировки сети позволяют проверять ошибки и контракты без аккаунта и настоящего `.env` |
 
-1. `/me/assigned_instagram_accounts` — проверяет токен и выбирает аккаунт.
-2. `/{account_id}/conversations` — получает диалоги со вложенными сообщениями.
+## Технологический стек
 
-Размер страницы — пять диалогов, запрашивается по 20 сообщений; значения заданы
-в `config.py`. Обрабатывается весь фактически возвращённый массив. При наличии
-продолжения выводится предупреждение. Автоматического обхода страниц и повторов нет.
-Код 0 означает успешное чтение страницы; код 1 — ошибку настроек или API.
-Полная история не обещается. Время показывается в формате API с часовым поясом.
+- **Python 3.13**, Requests — функции интеграции и HTTP-запросы к Graph API.
+- **FastAPI, Uvicorn** — ASGI-приёмник webhook; **tuna** — внешний HTTPS-туннель для диагностики.
+- **Loguru, python-dotenv** — централизованное логирование и локальные настройки.
+- **pytest, HTTPX** — изолированные тесты; **Ruff, uv, mise** — проверки, зависимости и задачи разработки.
 
-HTTP использует существующий `requests`: Bearer-заголовок, тайм-аут 30 секунд,
-закрытие ответов/сессии, без редиректов. Loguru выводит сообщения только в консоль.
-Сырые HTTP-ошибки, токены и URL из ответов не логируются.
+Версии инструментов закреплены в [mise.toml](mise.toml), зависимости — в
+[pyproject.toml](pyproject.toml) и [uv.lock](uv.lock).
 
-Отправка сообщений, БД и сохранение переписки отсутствуют.
-Отдельный диагностический webhook-сервер: `mise run tunnel`, затем `mise run webhook`.
-При запуске сервер запросит HTTPS-адрес tuna в консоли и выведет Callback URL для Meta.
-Нужны `APP_SECRET` и отдельный `WEBHOOK_VERIFY_TOKEN` в `.env`.
-Настройка и проверка событий — [Webhooks через tuna](docs/WEBHOOKS.md).
-`auth.py` и `publisher.py` также используют Unified Login; обычный запуск их не вызывает.
-Старые `INSTAGRAM_TOKEN`, Instagram OAuth и grant types больше не используются.
+## Быстрый старт
 
-## Авторизация и публикации из Python
+1. Установите [mise](https://mise.jdx.dev/getting-started.html), клонируйте репозиторий
+   и откройте его корень. Подготовьте закреплённые Python и uv, затем зависимости:
 
-Для получения токена через `auth.obtain_token()` добавьте в локальный `.env`:
+   ```console
+   mise trust
+   mise install
+   mise run setup
+   ```
 
-```dotenv
-APP_ID=<Meta App ID>
-APP_SECRET=<Meta App Secret>
-META_CONFIG_ID=<Configuration ID для Unified Login>
-REDIRECT_URI=https://localhost/
-```
+2. Создайте локальный `.env` по [.env.example](.env.example). Для чтения нужны
+   `META_ACCESS_TOKEN` типа System-user access token из Unified Login и доступ к
+   назначенному Instagram professional account. При нескольких аккаунтах или
+   неполной странице назначений укажите `INSTAGRAM_ACCOUNT_ID`. `META_API_VERSION`
+   по умолчанию — `v27.0`. Переменные терминала имеют приоритет над `.env`.
 
-Это реквизиты **Meta-приложения**. `REDIRECT_URI` должен точно совпадать с адресом
-в конфигурации Meta. Разрешения задаются в конфигурации, а не списком scopes в коде.
-Функция открывает браузер, запрашивает URL редиректа, проверяет `state` и адрес,
-обменивает код через `graph.facebook.com` и сохраняет `META_ACCESS_TOKEN`.
-Отдельный обмен на долгоживущий Instagram-токен `to_long_lived()` удалён:
-Unified Login сразу возвращает бизнес-токен; его срок зависит от конфигурации.
+   Подготовка Meta-приложения и остальные настройки — в [руководстве по настройке](docs/SETUP.md).
+   Если токена ещё нет, используйте [получение токена из Python](docs/AUTHENTICATION.md).
 
-`auth.refresh(token)` получает бизнес и системного пользователя через `/me`,
-затем запрашивает новый токен на 60 дней через `/{client_business_id}/system_user_access_tokens`.
-Нужны `APP_SECRET` и разрешение `business_management` у текущего токена.
-Функция возвращает ответ Meta, не сохраняет токен и не отзывает старый автоматически:
+3. Выполните локальные проверки без реального API:
+
+   ```console
+   mise run check
+   ```
+
+4. Чтобы прочитать доступную страницу Direct реального аккаунта, запустите:
+
+   ```console
+   mise run start
+   ```
+
+   Сценарий работает без аргументов, проверяет назначенный аккаунт и выводит
+   диалоги и сообщения. Он не вызывает публикацию или обновление токена.
+
+Для webhook-диагностики отдельно нужны установленный tuna, `APP_SECRET` и
+`WEBHOOK_VERIFY_TOKEN`: в первом терминале `mise run tunnel`, во втором —
+`mise run webhook`. Сервер запросит HTTPS-адрес туннеля и выведет Callback URL.
+Настройка подписок и проверка доставки — в [руководстве по webhooks](docs/WEBHOOKS.md).
+
+## Использование Python API
+
+Примеры предназначены для Python-окружения проекта и выполняют реальные операции
+при вызове. Медиа-URL ниже — образец: замените его своим публичным URL.
+
+### Получение токена
+
+После настройки Meta-реквизитов и redirect URI:
 
 ```python
-new_token = auth.refresh(token)["access_token"]
-auth.save_token(new_token)
+import auth
+from logging_config import configure_logging
+
+configure_logging()
+token = auth.obtain_token()  # Браузер → проверка редиректа → сохранение в .env.
 ```
 
-Публикации: `publisher.post_photo()`, `post_reel()`, `post_story()` и `post_carousel()`.
-Все принимают `token` — тот же `META_ACCESS_TOKEN`, и необязательный именованный
-`account_id`; без него используется `INSTAGRAM_ACCOUNT_ID` из настроек.
-Применяется общая `META_API_VERSION`; `/me/media` не используется.
-Токену нужны `instagram_basic` и `instagram_content_publish` и доступ к аккаунту.
-Медиа передаются публичными URL. Обработка видео ожидается с ограничением времени.
-Карусель — от 2 до 20 элементов IMAGE/VIDEO.
+### Чтение Direct
 
-Справочники Meta: [миграция на Unified Login](https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-instagram-login/migration-guide/),
-[токены](https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-unified-login/authentication),
-[обновление бизнес-токена](https://developers.facebook.com/documentation/facebook-login/facebook-login-for-business#bisu-token-api),
-[публикация](https://developers.facebook.com/documentation/instagram-platform/content-publishing).
-Получение/обновление токенов и публикации проверены только на HTTP-моках.
+`get_account()` возвращает словарь аккаунта, `show_inbox()` выводит сообщения
+через общий logger:
 
-## Разработка
+```python
+import os
 
-Python и uv закреплены в `mise.toml`. Зависимости — в `pyproject.toml` и `uv.lock`.
+import config
+import requests
+from logging_config import configure_logging
+from main import get_account, show_inbox
+
+configure_logging()
+with requests.Session() as session:
+    session.headers["Authorization"] = f"Bearer {os.environ['META_ACCESS_TOKEN']}"
+    account = get_account(session, config.INSTAGRAM_ACCOUNT_ID)
+    show_inbox(session, account["id"])
+```
+
+### Публикация фото
+
+Вызов создаёт публикацию в аккаунте из `INSTAGRAM_ACCOUNT_ID` и возвращает её ID:
+
+```python
+import os
+
+import publisher
+
+post_id = publisher.post_photo(
+    caption="Пример публикации",
+    image_url="https://media.example.com/photo.jpg",
+    token=os.environ["META_ACCESS_TOKEN"],
+)
+```
+
+Можно явно передать именованный `account_id`. Остальные типы публикаций и
+ограничения ожидания — в [Python API публикаций](docs/PUBLISHING.md);
+ручной выпуск и сохранение нового токена — в [авторизации](docs/AUTHENTICATION.md).
+
+## Тестирование
 
 ```console
-mise run setup
+mise run test
+mise run lint
 mise run check
 ```
 
-Тесты используют фиктивные данные, блокируют сеть и загрузку настоящего `.env`.
-Запуск приложения обращается к реальному аккаунту и не является тестом.
+`test` запускает pytest, `lint` — Ruff и проверку форматирования, `check` — обе
+проверки. Покрываются чтение Direct, выбор аккаунта, OAuth, выпуск токена,
+публикации, подписи и ограничения webhook, безопасные ошибки и логирование.
+Сетевые подключения и загрузка настоящего `.env` заблокированы; запись токена
+проверяется во временных файлах, webhook — через ASGITransport без HTTP-сервера.
+Организация тестов — в [руководстве разработчика](docs/DEVELOPMENT.md#изоляция-проверок).
 
-[Direct](docs/DIRECT.md) · [Webhooks](docs/WEBHOOKS.md) · [Архитектура](docs/ARCHITECTURE.md) ·
-[Разработка](docs/DEVELOPMENT.md) · [Состояние](PROJECT_STATUS.md) · [Правила](AGENTS.md).
+## Состояние и ограничения
+
+Текущая версия — `0.1.0`. Согласно [зафиксированным результатам](PROJECT_STATUS.md),
+реальные GET-запросы чтения аккаунта и Direct были успешны у предыдущей версии.
+Получение и выпуск нового токена, все типы публикаций и webhook-приёмник проверены
+изолированно. Работа текущей реализации с реальным Meta API и доставка через tuna
+не подтверждены этими тестами.
+
+- Direct запрашивает одну страницу: 5 диалогов и по 20 сообщений. Обрабатывается
+  весь возвращённый массив; при продолжении выводится предупреждение. Полной
+  пагинации, автоматических повторов и отправки сообщений Direct нет.
+- Автоматического обновления токенов нет. `refresh()` вызывается явно и не
+  сохраняет результат; срок действия токена зависит от конфигурации Meta.
+- Публикациям нужны публичные медиа-URL, доступ к аккаунту и соответствующие
+  разрешения Meta. Форматы и квоты API код полностью не валидирует.
+- Webhook-сервер предназначен для диагностики, не заявлен как production-ready:
+  нет очереди, дедупликации и хранения событий; подписки на аккаунт настраиваются отдельно.
+- БД и постоянного хранения переписки нет. При чтении Direct сообщения и ID
+  видны в консоли; webhook-сервер их не журналирует.
+
+## Документация
+
+- [Оглавление документации](docs/README.md) — выбор руководства по задаче.
+- [Настройка](docs/SETUP.md) · [Авторизация и токены](docs/AUTHENTICATION.md).
+- [Чтение Direct](docs/DIRECT.md) · [Публикация медиа](docs/PUBLISHING.md) · [Webhooks через tuna](docs/WEBHOOKS.md).
+- [Архитектура](docs/ARCHITECTURE.md) · [Разработка и тесты](docs/DEVELOPMENT.md).
+- [Состояние и подтверждённые проверки](PROJECT_STATUS.md).

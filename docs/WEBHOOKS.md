@@ -73,6 +73,11 @@ Business Verification. Development-проверка не заменяет App Re
 - Это приёмник для диагностики: повторы Meta могут увеличить счётчики; дедупликации,
   очереди и автоматических ответов нет.
 
+Сервер не заявлен как production-ready: нет постоянного хранения, фоновой
+обработки или гарантий доставки. Подписки на приложение и аккаунт настраиваются
+отдельно. Проверка входящего HTTP-запроса не подтверждает последующую обработку
+события бизнес-системой.
+
 ## Проверки
 
 `mise run check` запускает Ruff и изолированные pytest. Webhook-тесты используют
@@ -83,3 +88,5 @@ httpx ASGITransport с фиктивными ключами, без HTTP-серв
 Источники: [Meta Webhooks](https://developers.facebook.com/documentation/instagram-platform/webhooks/setup),
 [Unified Login](https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-unified-login/get-started),
 [tuna HTTP](https://tuna.am/docs/tunnels/http/).
+
+[Оглавление документации](README.md) · [Обзор проекта](../README.md)
